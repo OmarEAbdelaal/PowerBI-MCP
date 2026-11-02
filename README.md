@@ -25,7 +25,33 @@ Ask Claude things like:
 | Dataflows | `list_dataflows`, `get_dataflow_transactions`, `refresh_dataflow`✏️ |
 | Apps / gateways / capacities | `list_apps`, `list_app_reports`, `list_gateways`, `list_gateway_datasources`, `list_capacities` |
 | Admin (opt-in) | `admin_list_workspaces`, `admin_get_activity_events` |
-| Prompt | `analyze_dataset` |
+| **APG BIM Intelligence** | `calculate_bim_health_score`, `calculate_design_kpis`, `get_bim_kpi_framework` |
+| Prompts | `analyze_dataset`, `bim_executive_report`, `design_power_bi_dashboard` |
+| Resource | `apg://bim-kpi-framework` |
+
+## APG BIM Intelligence layer
+
+Built on the *APG BIM Intelligence & Power BI Assistant* project. Claude acts as a BIM Manager,
+data analyst and design-intelligence consultant, turning Revit data in Power BI into decisions:
+
+- **`calculate_bim_health_score`**: scores model-health KPIs (file size, warnings, CAD imports,
+  in-place families, groups, unused views/sheets, duplicate types, families, worksets, open/sync time)
+  and BIM-compliance KPIs (naming, shared parameters, view templates, worksets, families, sheets,
+  audit score). It returns a weighted **0–100 BIM Health Score**, Green/Yellow/Red per KPI, category
+  scores, trend against the previous period and top risks.
+- **`calculate_design_kpis`**: Efficiency = NSA / GFA × 100 (benchmark 70–90%), FAR and headroom,
+  plot coverage, parking balance and unit mix, with abnormal or non-compliant values flagged.
+- **`get_bim_kpi_framework`** / resource `apg://bim-kpi-framework`: KPI keys and targets, the
+  4-level dashboard hierarchy (Executive, BIM Manager, Design, Delivery), DAX measure patterns and the
+  required report format (Summary, Key Findings, Risks, Recommendations, KPI Table).
+- Prompts **`bim_executive_report`** and **`design_power_bi_dashboard`** run the full workflow.
+
+The default targets are starting points. To tune them, point `APG_KPI_TARGETS_FILE` at a JSON file
+that overrides only the keys you need, for example:
+
+```json
+{ "warnings_count": { "green": 300, "yellow": 1000 }, "file_size_mb": { "green": 250 } }
+```
 
 ✏️ = changes Power BI (hidden when `POWERBI_READ_ONLY=true`) ⚠️ = destructive (also hidden in read-only mode)
 
@@ -153,6 +179,7 @@ the endpoint acts with the configured Power BI identity. A `Dockerfile` is inclu
 | `POWERBI_MAX_ROWS` | `1000` | Max DAX rows returned to Claude per query |
 | `POWERBI_EXPORT_DIR` | `./powerbi_exports` | Where `export_report` saves files |
 | `POWERBI_TOKEN_CACHE` | `~/.powerbi-mcp/token_cache.json` | Device-code token cache |
+| `APG_KPI_TARGETS_FILE` | – | JSON file overriding BIM KPI targets/weights |
 | `POWERBI_REQUEST_TIMEOUT` | `120` | HTTP timeout (s) |
 | `POWERBI_API_BASE` | `https://api.powerbi.com/v1.0/myorg` | Sovereign clouds, e.g. `https://api.powerbigov.us/v1.0/myorg` |
 | `POWERBI_AUTHORITY_HOST` | `https://login.microsoftonline.com` | e.g. `https://login.microsoftonline.us` for GCC High |

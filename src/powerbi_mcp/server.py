@@ -12,6 +12,7 @@ from typing import Any, Callable, Literal
 from mcp.server.mcpserver import MCPServer
 from mcp.types import ToolAnnotations
 
+from . import bim
 from .client import PowerBIClient, PowerBIError
 from .config import Settings
 
@@ -31,6 +32,15 @@ DAX tips: queries must start with EVALUATE (or DEFINE ... EVALUATE). Prefer
 SUMMARIZECOLUMNS for aggregations, TOPN to limit rows, and reference existing
 measures as [Measure Name]. Omit workspace_id to use "My workspace" (or the
 configured default workspace).
+
+APG BIM Intelligence: you also act as a BIM Manager, data analyst and design
+intelligence consultant for APG (Architecture, Interior, Landscape). Read the
+resource apg://bim-kpi-framework for KPI definitions, targets, dashboard
+hierarchy and the mandatory report format (Summary, Key Findings, Risks,
+Recommendations, KPI Table with Green/Yellow/Red). Use
+calculate_bim_health_score and calculate_design_kpis to score model data
+pulled with execute_dax_query. Always interpret: trends, risks, anomalies,
+benchmarks and recommended actions - never just raw numbers.
 """
 
 mcp = MCPServer(name="powerbi", title="Power BI", instructions=INSTRUCTIONS, version="1.0.0")
@@ -741,8 +751,100 @@ async def admin_get_activity_events(
 
 
 # =====================================================================
+# APG BIM Intelligence
+# =====================================================================
+
+
+@read_tool
+async def calculate_bim_health_score(
+    metrics: dict[str, float], previous_metrics: dict[str, float] | None = None
+) -> dict:
+    """Score Revit model health / BIM compliance KPIs into a 0-100 BIM Health Score with
+    Green/Yellow/Red status per KPI, category scores, trends and top risks.
+
+    Args:
+        metrics: KPI values keyed by framework key, e.g. {"warnings_count": 820,
+            "cad_imports": 3, "file_size_mb": 410, "naming_compliance_pct": 91}.
+            See get_bim_kpi_framework for all keys and targets.
+        previous_metrics: Same keys from the previous period, to compute trends.
+    """
+    return bim.compute_bim_health(metrics, previous_metrics)
+
+
+@read_tool
+async def calculate_design_kpis(
+    gfa: float,
+    nsa: float | None = None,
+    plot_area: float | None = None,
+    building_footprint: float | None = None,
+    permitted_far: float | None = None,
+    permitted_plot_coverage_pct: float | None = None,
+    parking_provided: int | None = None,
+    parking_required: int | None = None,
+    unit_mix: dict[str, int] | None = None,
+) -> dict:
+    """Design Development KPIs: Efficiency (NSA/GFA x 100), FAR, plot coverage, parking
+    balance and unit mix, with flags for abnormal or non-compliant values.
+
+    Args:
+        unit_mix: e.g. {"Studio": 40, "1BR": 120, "2BR": 60}.
+    """
+    return bim.compute_design_kpis(
+        gfa, nsa, plot_area, building_footprint, permitted_far,
+        permitted_plot_coverage_pct, parking_provided, parking_required, unit_mix,
+    )
+
+
+@read_tool
+async def get_bim_kpi_framework() -> str:
+    """Return the APG BIM KPI framework: KPI keys and targets, dashboard hierarchy,
+    DAX measure patterns and the required report format."""
+    return bim.framework_markdown()
+
+
+@mcp.resource(
+    "apg://bim-kpi-framework",
+    name="APG BIM KPI Framework",
+    description="KPI definitions, targets, dashboard hierarchy, DAX patterns and report format",
+    mime_type="text/markdown",
+)
+def bim_kpi_framework_resource() -> str:
+    return bim.framework_markdown()
+
+
+# =====================================================================
 # Prompts
 # =====================================================================
+
+
+@mcp.prompt()
+def bim_executive_report(project: str, dataset_name: str | None = None) -> str:
+    """Produce an APG executive BIM / project health report from Power BI data."""
+    src = f" from the Power BI semantic model '{dataset_name}'" if dataset_name else ""
+    return (
+        f"Prepare an executive BIM intelligence report for project '{project}'{src}.\n\n"
+        "1) Read get_bim_kpi_framework. 2) Locate the dataset (list_workspaces / list_datasets) "
+        "and read get_dataset_schema. 3) Pull current and previous-period values for model "
+        "health, BIM compliance, design, delivery and team KPIs with execute_dax_query. "
+        "4) Score them with calculate_bim_health_score and calculate_design_kpis. "
+        "5) Write the report in the required format:\n" + bim.REPORT_FORMAT
+    )
+
+
+@mcp.prompt()
+def design_power_bi_dashboard(
+    audience: str = "Executive", project: str | None = None
+) -> str:
+    """Design an APG Power BI dashboard (Executive, BIM Manager, Design or Delivery)."""
+    p = f" for project '{project}'" if project else ""
+    return (
+        f"Design the APG {audience} Power BI dashboard{p}. Use the dashboard hierarchy and "
+        "design rules in get_bim_kpi_framework. Specify: page layout, each visual (type, "
+        "fields, measure), KPI cards with targets and RAG colouring, trend charts, drill-through "
+        "pages, slicers (Project, Discipline, Stage, Building, Date), and the DAX measures "
+        "needed. If a dataset exists, check its schema with get_dataset_schema first and map "
+        "visuals to real tables/columns; list any missing data/shared parameters to add in Revit."
+    )
 
 
 @mcp.prompt()
@@ -753,8 +855,8 @@ def analyze_dataset(dataset_name: str, question: str) -> str:
         "Steps: 1) find the workspace and dataset ids with list_workspaces / list_datasets; "
         "2) call get_dataset_schema to learn tables, columns, measures and relationships; "
         "3) write DAX that prefers existing measures, and run it with execute_dax_query; "
-        "4) iterate if needed, then summarise the findings with the key numbers, and show "
-        "the DAX you used."
+        "4) iterate if needed, then report using this format, and show the DAX you used:\n"
+        + bim.REPORT_FORMAT
     )
 
 
