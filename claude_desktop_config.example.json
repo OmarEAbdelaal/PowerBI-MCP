@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "powerbi": {
+      "command": "C:\\path\\to\\powerbi-mcp\\.venv\\Scripts\\powerbi-mcp.exe",
+      "env": {
+        "POWERBI_AUTH_MODE": "service_principal",
+        "POWERBI_TENANT_ID": "<tenant-id>",
+        "POWERBI_CLIENT_ID": "<client-id>",
+        "POWERBI_CLIENT_SECRET": "<client-secret>",
+        "POWERBI_DEFAULT_WORKSPACE_ID": "<workspace-id>",
+        "POWERBI_READ_ONLY": "false"
+      }
+    }
+  }
+}
